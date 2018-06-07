@@ -65,6 +65,9 @@ function extractNews(newsObjects){
     } else {
         console.log("listings fetched");
         currentNewsList = newNewsList;
+        send_mail(emails, newNewsList[0].title,newNewsList[0].link,'no coin','no markets').then(mailRes=>{
+            console.log("email sent");
+        })
     }
     console.log("Latest Listing: ",currentNewsList[0].title);
 }
