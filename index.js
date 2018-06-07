@@ -3,8 +3,7 @@ var fetch = require("node-fetch");
 const nodemailer = require('nodemailer');
 
 emails = [
-    "tobi418@gmail.com",
-    "bayarsmn@yahoo.com"
+    "tobi418@gmail.com"
 ];
 
 var newNewsList = [];
@@ -13,11 +12,12 @@ fetchHTML();
 
 setInterval(function(){
     fetchHTML();
-},60000);
+},10000);
 
 
 function fetchHTML(){
     fetch('https://support.binance.com/hc/en-us/sections/115000106672-New-Listings').then(res => res.text()).then(body =>{
+    //fetch('http://localhost:8000/test.html').then(res => res.text()).then(body =>{
         parsed = HTMLParser.parse(body);
         //console.log(parsed.querySelector('.article-list').childNodes.length);
         extractNews(parsed.querySelector('.article-list').childNodes);
@@ -32,28 +32,30 @@ function extractNews(newsObjects){
         }
     });
     tempList.forEach(element => {
-        newNewsList.push(element[1].childNodes[0].rawText);
+        let rawLink = element[1].rawAttrs;
+        let link = rawLink.substring(rawLink.indexOf('"')+1, rawLink.lastIndexOf('"'));
+        newNewsList.push({title:element[1].childNodes[0].rawText, link:link});
     });
     if(currentNewsList.length > 0){
-        if(newNewsList[0] != currentNewsList[0]){
+        if(newNewsList[0].title != currentNewsList[0].title){
             currentNewsList = newNewsList;
             console.log("new listing!!!");
-            getMarkets(newNewsList[0]).then(markets=>{
+            getMarkets(newNewsList[0].title).then(markets=>{
                 let marketsMessage = "";
-                markets.forEach(el=>{
-                    marketsMessage = marketsMessage+el+', ';
-                });
-                if(markets.length > 0){
-                    send_mail(emails, newNewsList[0],marketsMessage).then(mailRes=>{
+                if(markets.markets.length > 0){
+                    markets.markets.forEach(el=>{
+                        marketsMessage = marketsMessage+el+'<br>';
+                    });
+                    send_mail(emails, newNewsList[0].title, newNewsList[0].link ,markets.coinName,marketsMessage).then(mailRes=>{
                         console.log("email sent");
                     })
                 } else {
-                    send_mail(emails, newNewsList[0],'no markets fetched').then(mailRes=>{
+                    send_mail(emails, newNewsList[0].title, newNewsList[0].link,'no coin','no markets').then(mailRes=>{
                         console.log("email sent");
                     })
                 }
             }).catch(err=>{
-                send_mail(emails, newNewsList[0],'no markets fetched').then(mailRes=>{
+                send_mail(emails, newNewsList[0].title,newNewsList[0].link,'no coin','no markets').then(mailRes=>{
                     console.log("email sent");
                 })
             })
@@ -64,7 +66,7 @@ function extractNews(newsObjects){
         console.log("listings fetched");
         currentNewsList = newNewsList;
     }
-    console.log("Latest Listing: ",currentNewsList[0]);
+    console.log("Latest Listing: ",currentNewsList[0].title);
 }
 
 function getMarkets(newsTitle){
@@ -89,19 +91,21 @@ function getMarkets(newsTitle){
                             markets.push(rawMarketName.substring(rawMarketName.indexOf('"')+1,rawMarketName.lastIndexOf('"')));
                         }
                     });
-                    resolve(Array.from(new Set(markets)));
+                    resolve({markets:Array.from(new Set(markets)), coinName:coinName});
                 } else {
-                    resolve([]);
+                    resolve({markets:[],coinName:'No Coin'});
                 }
             }).catch(err=>{
                 reject(err);
             });
+        } else {
+            resolve({markets:[],coinName:'No Coin'});
         }
     })
 }
 
 
-var send_mail = function(to, newsTitle, markets='', attachment){
+var send_mail = function(to, newsTitle , link , coinName='', markets='', attachment){
     transporter = nodemailer.createTransport({
     host: 'smtp.sparkpostmail.com',
     port: 587,
@@ -122,13 +126,13 @@ var send_mail = function(to, newsTitle, markets='', attachment){
     to: to, // list of receivers
     subject: 'Binance listings', // Subject line
     //text: text, // plain text body
-    html: '<b>News Title:</b> '+newsTitle+'<br><b>Markets: </b>'+markets, // html body
+    html: '<b>News Title:</b> <a href="https://support.binance.com'+link+'">'+newsTitle+'</a><br><b>Coin Name: </b>'+coinName+'<br><b>Markets: </b><br>'+markets, // html body
     /*attachments:[{   // utf-8 string as an attachment
         filename: attachment,
         path: path.join(__dirname, './'+attachment)
     }]
     */
-};
+    };
 
     // send mail with defined transport object
     return new Promise(function(resolve, reject){
